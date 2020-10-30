@@ -1,0 +1,32 @@
+#include <iostream>
+#include <opencv2/opencv.hpp>
+
+using namespace std;
+using namespace cv;
+
+int main()
+{
+    VideoCapture cap(0);//打开摄像头
+    if(!cap.isOpened())
+    {
+        cout<< "不能正常打开摄像头" <<endl;
+        return -1;
+    }
+    while(1)
+    {
+        Mat frame;//接收摄像头的帧
+        Mat deMat;//输出图像
+        int siz = 11;//中值区域大小
+
+        cap >> frame;//接收摄像头的帧
+        frame.copyTo(deMat);//复制给deMat
+
+        medianBlur(frame,deMat,siz);//中值滤波
+
+        imshow("原图",frame);//显示原图
+        imshow("中值滤波图",deMat);//显示中值滤波后的图像
+        waitKey(30);
+    }
+    return 0;
+
+}
