@@ -1,0 +1,141 @@
+#include <iostream>
+#include <opencv2/opencv.hpp>
+using namespace cv;
+using namespace std;
+
+int main()
+{
+	Mat dstMat;
+	Mat srcMat = imread("D:\\picture\\20.jpg", 1);
+	Mat gray_srcMat = imread("D:\\picture\\20.jpg", 0);
+	int height = srcMat.rows;
+	int width = srcMat.cols;
+	Point2f src_pt[1000];//存储可能的边界点
+	Point2f buff[1000];//冒泡法的缓冲存储
+	Point2f rsrc_pt[4];//变换前坐标
+	int c = 0;
+
+
+	/*对各个靠近边缘的像素遍历，寻找可能的边界点*/
+	//对靠近上方的像素遍历
+
+
+	for (int i = 0; i < 5; i++)
+	{
+		uchar* data = gray_srcMat.ptr<uchar>(i);
+		for (int j = 0; j < srcMat.cols; j++)
+		{
+			if (!(data[j] > 246))
+			{
+				src_pt[c] = Point2f(j, i);
+				c++;
+			}
+		}
+	}
+	//对靠近下方的像素遍历
+	for (int i = 310; i < srcMat.rows; i++)
+	{
+		uchar* data = gray_srcMat.ptr<uchar>(i);
+		for (int j = 0; j < srcMat.cols; j++)
+		{
+			if (!(data[j] > 245))
+			{
+				src_pt[c] = Point2f(j, i);
+				c++;
+			}
+		}
+	}
+	//对靠近左方的像素遍历
+
+
+	for (int i = 0; i < srcMat.rows; i++)
+	{
+		uchar* data = gray_srcMat.ptr<uchar>(i);
+		for (int j = 0; j < 5; j++)
+		{
+			if (!(data[j] > 110))
+			{
+				src_pt[c] = Point2f(j, i);
+				c++;
+			}
+		}
+	}
+	//对靠近右方的像素遍历
+	for (int i = 0; i < srcMat.rows; i++)
+	{
+		uchar* data = gray_srcMat.ptr<uchar>(i);
+		for (int j = 310; j < srcMat.cols; j++)
+		{
+			if (!(data[j] > 245))
+			{
+				src_pt[c] = Point2f(j, i);
+				c++;
+			}
+		}
+	}
+
+
+	/*根据靠近边界的程度，判断其是否为边界点*/
+	for (int i = 1; i <= c; i++)
+	{
+		//最后src_pt[c]对应的为最下方的对应点
+		if (src_pt[i].y <= src_pt[i - 1].y)
+		{
+			buff[i] = src_pt[i];
+			src_pt[i] = src_pt[i - 1];
+			src_pt[i - 1] = buff[i];
+		}
+	}
+	rsrc_pt[1] = src_pt[c];
+	for (int i = 1; i <= c; i++)
+	{
+		//最后src_pt[c]对应的为最上方的对应点
+		if (src_pt[i].y >= src_pt[i - 1].y)
+		{
+			buff[i] = src_pt[i];
+			src_pt[i] = src_pt[i - 1];
+			src_pt[i - 1] = buff[i];
+		}
+	}
+	rsrc_pt[0] = src_pt[c];
+	for (int i = 1; i <= c; i++)
+	{
+		//最后src_pt[c]对应的为最右方的对应点
+		if (src_pt[i].x <= src_pt[i - 1].x)
+		{
+			buff[i] = src_pt[i];
+			src_pt[i] = src_pt[i - 1];
+			src_pt[i - 1] = buff[i];
+		}
+	}
+	rsrc_pt[3] = src_pt[c];
+	for (int i = 1; i <= c; i++)
+	{
+		//最后src_pt[c]对应的为最左方的对应点
+		if (src_pt[i].x >= src_pt[i - 1].x)
+		{
+			buff[i] = src_pt[i];
+			src_pt[i] = src_pt[i - 1];
+			src_pt[i - 1] = buff[i];
+		}
+	}
+	rsrc_pt[2] = src_pt[c];
+
+
+	//变换后坐标
+	Point2f dst_pt[] = {
+	Point2f(0,0),
+	Point2f(srcMat.cols-1,srcMat.rows-1),
+	Point2f(0,srcMat.rows-1),
+	Point2f(srcMat.cols-1,0)};
+
+	//计算仿射矩阵
+	Mat perspective_matrix = getPerspectiveTransform(rsrc_pt,dst_pt);
+
+	//变换
+	warpPerspective(srcMat,dstMat,perspective_matrix,srcMat.size());
+
+	imshow("srcMat", srcMat);
+	imshow("dstMat", dstMat);
+	waitKey(0);
+}
