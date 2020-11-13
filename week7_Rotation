@@ -1,0 +1,27 @@
+#include <iostream>
+#include <opencv2/opencv.hpp>
+using namespace cv;
+using namespace std;
+
+int main()
+{
+	Mat dstMat;
+	Mat srcMat = imread("D:\\picture\\21.jpg", 1);
+	float angle = -10;
+	float scale = 1;		
+	
+	Point2f center(srcMat.cols/2.0,srcMat.rows/2.0);
+	//获取仿射矩阵
+	Mat rot = getRotationMatrix2D(center,angle,scale);
+	//获取外接四边形
+	Rect bbox = RotatedRect(center,srcMat.size(),angle).boundingRect();
+	//调整仿射参数
+	rot.at<double>(0, 2) += bbox.width / 2 - center.x;
+	rot.at<double>(1, 2) += bbox.height / 2 - center.y;
+	//仿射变换
+	warpAffine(srcMat,dstMat,rot,bbox.size());
+
+	imshow("dstMat", dstMat);
+	imshow("srcMat",srcMat);
+	waitKey(0);
+}
