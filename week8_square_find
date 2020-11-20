@@ -1,0 +1,46 @@
+#include <iostream>
+#include <opencv2/opencv.hpp>
+using namespace cv;
+using namespace std;
+
+int main()
+{
+	Mat dstMat;
+	Mat srcMat = imread("D:\\picture\\32.jpg", 0);//读灰度图
+	Mat result = imread("D:\\picture\\32.jpg", 1);//读彩色图
+	Point anchor = Point(-1, -1);//锚点
+	Mat kernel = getStructuringElement(MORPH_RECT, Size(5, 5), anchor);//形态运算结构
+	vector<vector<Point>> contours;//轮廓
+	vector<Vec4i>hierarchy;
+
+	srcMat.copyTo(dstMat);
+	threshold(dstMat, dstMat, 130, 255, THRESH_BINARY);//阈值二值化  
+	imshow("dstMat", dstMat);
+
+	morphologyEx(dstMat, dstMat, 2, kernel, anchor, 1, BORDER_CONSTANT);//开运算腐蚀小的噪声
+
+	findContours(dstMat, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_NONE); //寻找轮廓
+
+	for (int i = 1; i < contours.size(); i++)//筛选轮廓并绘制会轮廓及最小外接四边形
+	{
+		RotatedRect rbox = minAreaRect(contours[i]);
+
+		float width = (float)rbox.size.width;
+		float height = (float)rbox.size.height;
+		float ratio = height / width;
+
+		if (ratio < 1.2 && ratio > 0.8&& width > 10)
+		{
+			drawContours(result, contours, i, Scalar(0, 255, 255), 1, 8);
+			
+			Point2f vtx[4];
+			rbox.points(vtx);
+			for (int j = 0; j < 4; j++)
+			{
+				line(result, vtx[j], vtx[j < 3 ? j + 1 : 0], Scalar(0, 0, 255), 2, LINE_AA);
+			}
+		}
+	}
+	imshow("result", result);//显示结果
+	waitKey(0);
+}
