@@ -1,0 +1,44 @@
+#include <iostream>
+#include <opencv2/opencv.hpp>
+using namespace cv;
+using namespace std;
+
+int main()
+{
+
+	Mat result = imread("D:\\picture\\33.jpg", 1);//读彩色图
+	Mat buff;
+	cvtColor(result,buff,COLOR_BGR2HSV);
+	vector<Mat> channels;
+	split(buff,channels);
+	Mat s_channel = channels.at(1);
+	imshow("s_channel", s_channel);
+	vector<vector<Point>> contours;//轮廓
+	vector<Vec4i>hierarchy;
+
+	threshold(s_channel, s_channel, 100,255,THRESH_BINARY);//阈值二值化  
+	imshow("s_channel1", s_channel);
+
+	findContours(s_channel, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_NONE); //寻找轮廓
+
+	for (int i = 1; i < contours.size(); i++)//筛选轮廓并绘制会轮廓及最小外接四边形
+	{
+		RotatedRect rbox = minAreaRect(contours[i]);
+
+		float width = (float)rbox.size.width;
+		float height = (float)rbox.size.height;
+		float ratio = height / width;
+
+		if (ratio < 1.2 && ratio > 0.8 )
+		{
+			Point2f vtx[4];
+			rbox.points(vtx);
+			for (int j = 0; j < 4; j++)
+			{
+				line(result, vtx[j], vtx[j < 3 ? j + 1 : 0], Scalar(0, 255, 255), 2, LINE_AA);
+			}
+		}
+	}
+	imshow("result", result);//显示结果
+	waitKey(0);
+}
