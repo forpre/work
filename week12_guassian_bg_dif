@@ -1,0 +1,114 @@
+#include <iostream>
+#include <opencv2/opencv.hpp>
+using namespace cv;
+using namespace std;
+
+/*计算图像平均值*/
+Mat averageMat(Mat*srcMat,int cnt) 
+{
+	//初始化为0
+	Mat result = Mat::zeros(srcMat[0].rows,srcMat[0].cols,CV_8UC1);
+	//遍历Mat数组每个Mat的像素求均值
+	for (int i = 0; i < cnt; i++)
+	{
+		for (int m = 0; m < srcMat[0].rows; m++)
+		{
+			uchar* data = result.ptr<uchar>(m);
+			for (int n = 0; n < srcMat[0].cols; n++)
+			{   //计算平均值
+				data[n] += (uchar)(srcMat[i].at<uchar>(m, n) / cnt);
+			}
+		}
+	}
+	//返回存储平均值的Mat
+	return result;
+}
+
+/*计算图像方差*/
+Mat variMat(Mat *srcMat, Mat bgMat_r,int cnt)
+{
+	//初始化为0
+	Mat result = Mat::zeros(srcMat[0].rows, srcMat[0].cols, CV_8UC1);
+
+	//遍历Mat数组每个Mat的像素求方差
+	for (int i = 0; i < cnt; i++)
+	{
+		for (int m = 0; m < srcMat[i].rows; m++)
+		{
+			uchar* data = result.ptr<uchar>(m);
+			for (int n = 0; n < srcMat[i].cols; n++)
+			{   //计算方差
+				data[n] += (uchar)(pow((srcMat[i].at<uchar>(m, n) - bgMat_r.at<uchar>(m,n)),2)/cnt);
+			}
+		}
+	}
+	//返回存储方差的Mat
+	return result;
+}
+
+
+int main()
+{
+	//打开摄像头
+	VideoCapture cap(0);
+	Mat bgMat[20];//存储摄像头前20帧
+	Mat bgMat_r;//存储图像平均值
+	Mat bgMat_v;//存储图像方差
+	Mat frame; //存储摄像头帧数
+	Mat subMat;//差分图像
+	int cnt = 0;
+	int frame_cnt = 20;
+	int vari = 0;
+	
+	//判定是否正常打开摄像头
+	if (!cap.isOpened())
+	{
+		std::cout << "不能打开视频文件" << std::endl;
+		return -1;
+	}
+
+	while (1)
+	{
+		cap >> frame;
+		cvtColor(frame, frame, COLOR_BGR2GRAY);//RGB图像转灰度图
+		medianBlur(frame, frame, 11);//中值滤波
+		GaussianBlur(frame, frame, Size(3,3), 3, 3);//高斯均值滤波
+		if (cnt < frame_cnt)
+		{
+			//截取前20帧作背景图
+			frame.copyTo(bgMat[cnt]);
+		}
+		if (cnt == frame_cnt)
+		{
+			//只计算一次
+			//计算平均值
+			bgMat_r = averageMat(bgMat, frame_cnt);
+			//计算方差
+			bgMat_v = variMat(bgMat, bgMat_r, frame_cnt);
+		}
+		if(cnt > frame_cnt)
+		{
+			//第21帧开始
+			//当前帧与高斯背景图相减
+			absdiff(frame, bgMat_r, subMat);
+			//根据结果与方差的大小判定是否为背景
+			for (int i = 0; i < frame.rows; i++)
+			{
+				for (int j = 0; j < frame.cols; j++)
+				{
+					if (subMat.at<uchar>(i, j) < bgMat_v.at<uchar>(i, j))
+					{
+						subMat.at<uchar>(i, j) = 0;
+					}
+					else
+					{
+						subMat.at<uchar>(i, j) = 255;
+					}
+				}
+			}
+			imshow("subMat", subMat);
+			waitKey(30);
+		}
+		cnt++;
+	}
+}
