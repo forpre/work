@@ -1,0 +1,65 @@
+#include<opencv2/opencv.hpp>
+#include<iostream>
+using namespace cv;
+using namespace std;
+
+int main()
+{
+	VideoCapture cap(0);
+
+	int cnt = 0;
+	Mat frame;
+	Mat tempMat, refMat;
+	Mat resultMat;
+
+	//判断是否正常打开摄像头
+	if (!cap.isOpened())
+	{
+		std::cout << "不能打开视频文件" << std::endl;
+		return -1;
+	}
+	//windows好像第一帧会出现灰色的，所以先调用一遍
+	cap >> frame;
+
+	while (1)
+	{
+		//第二帧开始
+		cap >> frame;
+		if (cnt == 0)
+		{
+			Rect2d r;
+			r = selectROI(frame,true);
+			tempMat = frame(r);
+			tempMat.copyTo(refMat);
+			destroyAllWindows();
+		}
+		int match_method = 0;
+		//模板匹配
+		matchTemplate(frame,refMat,resultMat,match_method);
+
+		//归一化
+		normalize(resultMat,resultMat,0,1,NORM_MINMAX,-1,Mat());
+
+		//获得resultMat最大值，最小值及其坐标
+		double minVal, maxVal; Point minLoc, maxLoc; Point matchLoc;
+		minMaxLoc(resultMat,&minVal,&maxVal,&minLoc,&maxLoc,Mat());
+
+		//根据匹配方法确定取最大值还是最小值
+		if ((match_method == TM_SQDIFF) || (match_method == TM_SQDIFF_NORMED))
+		{
+			matchLoc = minLoc;
+		}
+		else
+		{
+			matchLoc = maxLoc;
+		}
+		//画矩形
+		rectangle(frame,matchLoc,Point(matchLoc.x+refMat.cols,matchLoc.y+refMat.rows),Scalar(255,255,0),2,8);
+
+		imshow("frame",frame);
+		imshow("refMat",refMat);
+		imshow("resultMat",resultMat);
+		waitKey(30);
+		cnt++;
+	}
+}
