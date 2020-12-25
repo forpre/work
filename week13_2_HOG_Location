@@ -1,0 +1,199 @@
+#include <iostream>
+#include <opencv2/opencv.hpp>
+using namespace cv;
+using namespace std;
+
+//计算HOG函数
+int calcHOG(Mat src, float *Hist, int nAngle, int cellsize_x,int cellsize_y)
+{
+	//计算各个图片梯度与角度并转换成极坐标形式
+	Mat gx, gy;
+	Mat mag, angle;
+
+	Sobel(src, gx, CV_32F, 1, 0, 1);
+	Sobel(src, gy, CV_32F, 0, 1, 1);
+	cartToPolar(gx, gy, mag, angle, true);
+
+	//各个图像cell划分
+	int nx = src.cols / cellsize_x;
+	int ny = src.rows / cellsize_y;
+
+
+	//角度方向量化，图像分割成cell并绘制每个cell的直方图，最后组合成最终的直方图
+	Rect roi(0, 0, cellsize_x, cellsize_y);
+	for (int i = 0; i < ny; i++)
+	{
+		for (int j = 0; j < nx; j++)
+		{
+			Mat roiMat(src.rows, src.cols, CV_8UC1);
+			Mat roiMag(src.rows, src.cols, CV_8UC1);
+			Mat roiAgl(src.rows, src.cols, CV_8UC1);
+
+			roi.x = j*cellsize_x;
+			roi.y = i*cellsize_y;
+			//赋值图像
+			roiMat = src(roi);
+			roiMag = mag(roi);
+			roiAgl = angle(roi);
+			//当前cell第一个元素在直方图数组中的位置
+			int head = (i*nx + j)*nAngle;
+
+			//绘制每个cell直方图并将组合成总直方图
+			for (int n = 0; n < roiMat.rows; n++)
+			{
+				uchar* Agl = roiAgl.ptr<uchar>(n);
+				uchar* Mag = roiMag.ptr<uchar>(n);
+				for (int m = 0; m < roiMat.cols; m++)
+				{
+					int c = (int)Agl[m] / 45;
+					Hist[head + c] += (float)Mag[m];
+				}
+			}
+		}
+	}
+
+	return 0;
+}
+
+//计算欧几里得距离
+float normL2(float *sHist, float *dHist, int bins)
+{
+	float distance = 0;
+	for (int i = 0; i < bins; i++)
+	{
+		distance += pow((sHist[i] - dHist[i]), 2);
+	}
+	distance = sqrt(distance);
+
+	return distance;
+}
+
+//使用HOG匹配图像，frame为输入图像，refMat为模板，resultMat存储各项匹配值及其对应的坐标
+int HOGmatchTemplate(Mat frame, Mat refMat, Mat &resultMat)//,Point roi) 
+{
+	//以refMat大小为cell划分图像frame
+	int cellsize_x = refMat.cols;
+	int cellsize_y = refMat.rows;
+	/*	int cellsize;
+	if (cellsize_x < cellsize_y)
+	{
+	cellsize = cellsize_x;
+	}
+	else
+	{
+	cellsize = cellsize_y;
+	}*/
+	//图像cell划分个数，每个cell之间有重叠
+	int nx = frame.cols - cellsize_x;
+	int ny = frame.rows - cellsize_y;
+
+	int nAngle = 8;//将角度分成8个维度
+
+	 /*	//假定一帧时间内物体运动的区域
+				   int nx = roi.x - cellsize_x;
+				   int ny = roi.y - cellsize_y;
+				   int nx_1 = frame.cols;
+				   int ny_1 = frame.rows;*/
+
+	//--计算frame的HOG值及其与模板refMat欧几里得距离，存储欧几里得距离值及其对应的坐标与resultMat中--//
+
+	//动态分配内存建立动态数组存储frame的HOG直方图
+	int bins = nx*ny*nAngle;
+
+	float * ref_hist = new float[bins];
+	memset(ref_hist, 0, sizeof(float)*bins);
+
+	int bins_1 = 1 * nAngle;
+	float * hist = new float[bins_1];
+	memset(hist, 0, sizeof(float)*bins_1);
+
+	int reCode = 0;
+	//计算输入refMat的HOG直方图
+	reCode = calcHOG(refMat, hist, nAngle, cellsize_x, cellsize_y);
+	//计算frame各个cell与模板的直方图的距离
+	//用resultMat存储距离及其坐标
+	resultMat = Mat::zeros(frame.rows - cellsize_y, frame.cols - cellsize_x, CV_32F);
+	for (int i = 0; i < frame.rows - cellsize_y; i++)
+	{
+		float *data = resultMat.ptr<float>(i);
+		for (int j = 0; j < frame.cols - cellsize_x; j++)
+		{
+			Rect roi = Rect(j, i, cellsize_x, cellsize_y);
+			//计算frame每个cell对应的HOG直方图及其与模板直方图的距离
+			reCode = calcHOG(frame(roi), ref_hist + (i*nx + j)*nAngle, nAngle, cellsize_x, cellsize_y);
+			float dis = normL2(ref_hist + (i*nx + j)*nAngle, hist, bins_1);
+			//	cout << ref_hist << endl;
+			data[j] = dis;
+			//			ref_hist = 0;//数据清零
+		}
+	}
+
+	/*	//用resultMat存储距离及其坐标
+	resultMat = Mat::zeros(ny_1-ny, nx_1-nx,CV_32F);
+	for (int i = ny; i < ny_1-cellsize_y; i++)
+	{
+	for (int j = nx; j < nx_1-cellsize_x; j++)
+	{
+	Rect roi = Rect(j, i, cellsize_x, cellsize_y);
+	//计算frame每个cell对应的HOG直方图
+	reCode = calcHOG(frame(roi), ref_hist, nAngle, cellsize_x,cellsize_y);
+	resultMat.at<float>(i-ny,j-nx) = normL2(ref_hist, hist, bins);
+	}
+	}*/
+
+	if (reCode != 0)
+	{
+		delete[] ref_hist;//释放内存
+		delete[] hist;
+		return -1;
+	}
+
+	return 0;
+
+}
+
+
+int main()
+{
+	Mat refMat = imread("D:\\picture\\week13_1.jpg", 0);
+	Mat frame = imread("D:\\picture\\week13_2.jpg", 0);
+
+	Mat resultMat;
+	Mat rframe;
+	Mat rrefMat;
+
+	//放大，缩小尺度
+	float scale_small = 1;
+	float scale_lager = 1 / scale_small;
+
+	// 缩小图像，比例为(0.4, 0.4)  
+	Size dsize = Size(round(scale_small * frame.cols), round(scale_small * frame.rows));
+	resize(frame, rframe, dsize, 0, 0, INTER_AREA);
+	Size dsize_1 = Size(round(scale_small * refMat.cols), round(scale_small * refMat.rows));
+	resize(refMat, rrefMat, dsize_1, 0, 0, INTER_AREA);
+	
+
+	//模板匹配
+	HOGmatchTemplate(rframe, rrefMat, resultMat);
+
+	 //归一化
+	normalize(resultMat, resultMat, 0, 1, NORM_MINMAX, -1, Mat());
+
+	//获得resultMat最大值，最小值及其坐标
+	double minVal, maxVal; Point minLoc, maxLoc; Point matchLoc;
+	minMaxLoc(resultMat, &minVal, &maxVal, &minLoc, &maxLoc, Mat());
+//	cout << resultMat << endl;
+
+	//HOG匹配是计算直方图欧几里得距离，故为最小值对应的坐标，并进行修正
+	matchLoc.x = minLoc.x * scale_lager;
+	matchLoc.y = minLoc.y * scale_lager;
+
+
+	//画矩形
+	rectangle(frame, matchLoc, Point(matchLoc.x + refMat.cols, matchLoc.y + refMat.rows), Scalar(255, 255, 0), 2, 8);
+
+	imshow("frame", frame);
+	imshow("refMat", refMat);
+	waitKey(0);
+
+}
