@@ -1,0 +1,96 @@
+#include <iostream>
+#include <opencv2/opencv.hpp>
+using namespace std;
+using namespace cv;
+
+int kMeansDemo();
+
+int main()
+{
+	double start = static_cast<double>(getTickCount());
+
+	kMeansDemo();
+
+	//结束计时
+	double time = ((double)getTickCount() - start) / getTickFrequency();
+	//显示时间
+	cout << "processing time:" << time / 1000 << "ms" << endl;
+
+	//等待键盘响应，按任意键
+	system("pause");
+
+	return 0;
+}
+
+int kMeansDemo()
+{
+	const int MAX_CLUSTERS = 5;//最大分类数为5
+	Scalar colorTab[] =//颜色表
+	{
+		Scalar(0, 0, 255),
+		Scalar(0,255,0),
+		Scalar(255,100,100),
+		Scalar(255,0,255),
+		Scalar(0,255,255)
+	};
+
+	Mat img(500, 500, CV_8UC3);//加载图像
+	RNG rng(12345);
+
+	while (1)
+	{
+		int k, clusterCount = rng.uniform(2, MAX_CLUSTERS + 1);//确定分类数量和样本数量
+		int i, sampleCount = rng.uniform(1, 1001);
+		Mat points(sampleCount, 1, CV_32FC2), labels;//存储样本坐标及标签
+
+		clusterCount = MIN(clusterCount, sampleCount);
+		std::vector<Point2f> centers;
+
+		/* generate random sample from multigaussian distribution */
+		//随机在某个位置生成一类靠近的数据坐标
+		for (k = 0; k < clusterCount; k++)
+		{
+			Point center;
+			center.x = rng.uniform(0, img.cols);
+			center.y = rng.uniform(0, img.rows);
+			Mat pointChunk = points.rowRange(k*sampleCount / clusterCount, //假定Points的每个samoleCount/clusterCount为一个类
+				k == clusterCount - 1 ? sampleCount :
+				(k + 1)*sampleCount / clusterCount);
+			//浅拷贝所以填充的是Points
+			//每几行填充高斯分布的随机数，第三、四个参数分别为均值和方差
+			rng.fill(pointChunk, RNG::NORMAL, Scalar(center.x, center.y), Scalar(img.cols*0.05, img.rows*0.05));
+		}
+
+		randShuffle(points, 1, &rng);//打乱Points中的顺序
+
+		double compactness = kmeans(points, clusterCount, labels,  //KMeans聚类输出compactness：紧密度，返回每个点到相应重心的距离的平方和
+                                                                     //labels：结果标记，每个成员被标记为分组的序号，如 0,1,2,3,4...等
+                                                                     //centers：由聚类的中心组成的数组
+			TermCriteria(TermCriteria::EPS + TermCriteria::COUNT, 10, 1.0),
+			3, KMEANS_PP_CENTERS, centers);
+
+		img = Scalar::all(0);//设置背景颜色为黑色
+		//画样本小圆，不同类的样本圆颜色不一样
+		for (i = 0; i < sampleCount; i++)
+		{
+			int clusterIdx = labels.at<int>(i);
+			Point ipt = points.at<Point2f>(i);
+			circle(img, ipt, 2, colorTab[clusterIdx], FILLED, LINE_AA);
+		}
+		//画类所在的大圆，同样其颜色不一样
+		for (i = 0; i < (int)centers.size(); ++i)
+		{
+			Point2f c = centers[i];
+			circle(img, c, 40, colorTab[i], 1, LINE_AA);
+		}
+		cout << "Compactness: " << compactness << endl;
+
+		imshow("clusters", img);
+
+		char key = (char)waitKey();
+		if (key == 27 || key == 'q' || key == 'Q') // 'ESC'
+			break;
+	}
+
+	return 0;
+}
